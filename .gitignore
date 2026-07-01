@@ -1,0 +1,40 @@
+# Training data (large files)
+*.jsonl
+training/
+output/
+
+# Logs
+*.log
+training_output_*.log
+training_run*.log
+
+# Model weights (too large for git)
+*.gguf
+*.bin
+*.safetensors
+*.pth
+*.ckpt
+
+# Environment & secrets
+.env
+.env.*
+*.key
+*.pem
+*_secret*
+*_api_key*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# OS
+.DS_Store
+*.tmp
+*.swp
+
+# IDE
+.idea/
+.vscode/
+*.iml
