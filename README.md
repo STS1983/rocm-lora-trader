@@ -158,6 +158,45 @@ Adjust this for your GPU architecture:
 - RX 7600: `11.0.0`
 - RX 7900 XTX: `11.0.0`
 
+## Use Cases Beyond Trading
+
+The pipeline is completely generic — swap the system prompt and training data and you can fine-tune for any domain:
+
+| Domain | System Prompt | Training Data |
+|--------|---------------|---------------|
+| **Trading** | Crypto signal recognition | Market indicators + signals |
+| **Customer Support** | Help desk assistant | Support tickets + responses |
+| **Code Review** | Code analysis assistant | Code snippets + review comments |
+| **Medical** | Diagnostic assistant | Symptoms + diagnoses |
+| **Legal** | Contract review assistant | Contracts + analysis |
+| **Finance** | Risk assessment assistant | Financial data + risk ratings |
+| **Education** | Tutor assistant | Questions + explanations |
+
+The pipeline is universal:
+
+```
+Your Data (JSONL) → convert_data.py → TRL Format → train_qlora_v3.py → LoRA Adapter → merge_and_convert.py → Ollama Model
+```
+
+Every step is swappable. Just provide different `.jsonl` + different `system_prompt.txt` → different model.
+
+### Quick Domain Switch Example
+
+```bash
+# Switch from trading to customer support:
+# 1. Create your training data
+{"prompt": "Customer asks about refund policy", "completion": "Our refund policy allows..."}
+
+# 2. Write your system prompt
+echo "You are a helpful customer support assistant." > my_system_prompt.txt
+
+# 3. Convert and train
+python convert_data.py --input my-data.jsonl --system-prompt my_system_prompt.txt --output-dir training/
+python train_qlora_v3.py  # Uses whatever data is in training/
+```
+
+Same hardware, same ROCm workaround, different domain. That's it.
+
 ## License
 
 MIT
