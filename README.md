@@ -229,7 +229,7 @@ The pipeline is completely generic — swap the system prompt and training data 
 The pipeline is universal:
 
 ```
-Your Data (JSONL) → convert_data.py → TRL Format → train_qlora_v3.py → LoRA Adapter → merge_and_convert.py → Ollama Model
+Your Data (JSONL) → convert_data.py → TRL Format → train_qlora_v5.py → LoRA Adapter → merge_convert_cpu.py → Ollama Model
 ```
 
 Every step is swappable. Just provide different `.jsonl` + different `system_prompt.txt` → different model.
@@ -246,10 +246,45 @@ echo "You are a helpful customer support assistant." > my_system_prompt.txt
 
 # 3. Convert and train
 python convert_data.py --input my-data.jsonl --system-prompt my_system_prompt.txt --output-dir training/
-python train_qlora_v3.py  # Uses whatever data is in training/
+python train_qlora_v5.py  # Uses whatever data is in training/
 ```
 
 Same hardware, same ROCm workaround, different domain. That's it.
+
+## Project Structure
+
+```
+rocm-lora-trader/
+├── train_qlora_v5.py       # ✅ Main training script (use this!)
+├── train_qlora_v3.py       # ⚠️ Original (crashes at step 70 on multi-GPU)
+├── merge_convert_cpu.py    # ✅ CPU-only merge (use this!)
+├── merge_and_convert.py    # ⚠️ GPU merge (crashes on multi-GPU ROCm)
+├── convert_data.py         # Convert JSONL → TRL format
+├── auto-retrain.sh         # Weekly retraining pipeline
+├── monitor_training.sh     # Training monitor script
+├── system_prompt.txt       # Trading system prompt
+├── archive/
+│   ├── train_qlora_v2.py   # v2 — bitsandbytes (crashed)
+│   └── train_qlora_v4.py   # v4 — gradient fix (crashed)
+└── README.md
+```
+
+## Training Results
+
+Successful training on 4× RX 6600 XT (MortySmith):
+
+| Metric | Value |
+|--------|-------|
+| Base Model | Qwen2.5-3B-Instruct |
+| LoRA Rank | 16, Alpha 32 |
+| Training Time | 69 minutes |
+| Training Loss | 0.303 |
+| Epochs | 3 |
+| Train Samples | 590 |
+| Val Samples | 148 |
+| Quantization | fp16 (no 4-bit) |
+| Multi-GPU | Yes (device_map=auto) |
+| Deployed As | trader-v2 (6.2 GB f16 GGUF) |
 
 ## License
 
