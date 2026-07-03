@@ -1,6 +1,6 @@
 # ROCm LoRA Trader
 
-Fine-tune QLoRA/LoRA trading models on AMD GPUs (ROCm 7.0).
+Fine-tune LoRA trading models on AMD GPUs (ROCm 7.0).
 
 Tested on 4× AMD Radeon RX 6600 XT with PyTorch 2.11 + ROCm 7.0.
 
@@ -8,10 +8,31 @@ Tested on 4× AMD Radeon RX 6600 XT with PyTorch 2.11 + ROCm 7.0.
 
 Standard QLoRA tutorials assume NVIDIA CUDA. On AMD GPUs with ROCm, `bitsandbytes` 4-bit quantization segfaults. This project provides a **working solution** using fp16 LoRA with multi-GPU model parallelism instead.
 
+### Crash History (what we learned the hard way)
+
+| Version | Approach | Result |
+|---------|----------|--------|
+| v1 | 4-bit QLoRA (bitsandbytes) | ❌ Segfault on ROCm |
+| v2 | bitsandbytes with workarounds | ❌ Crasht |
+| v3 | fp16 LoRA, `device_map="auto"` | ⚠️ OOM crash at step 70 |
+| v4 | Gradient memory fix | ❌ Crasht |
+| **v5** | **Resilient Multi-GPU** | ✅ **Läuft durch!** |
+
+### v5 Fixes that made it work
+
+1. **`HSA_ENABLE_SDMA=0`** — Disables SDMA (stability fix for cross-GPU transfers)
+2. **`PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.6,max_split_size_mb:128`** — Memory management for ROCm
+3. **`NCCL_P2P_LEVEL=SYS`** — Enables P2P across all GPUs
+4. **Checkpoints every 25 steps** — No progress lost on crash
+5. **Auto-resume** — Detects latest checkpoint and continues
+6. **CPU-only merge** — Merging LoRA weights on GPU also crashed; `merge_convert_cpu.py` does it on CPU
+
 ## Features
 
 - ✅ **Works on AMD/ROCm** — No segfaults, no bitsandbytes needed
 - ✅ **Multi-GPU Training** — Distributes model across 2-4 GPUs automatically
+- ✅ **Crash-Resilient** — Checkpoints every 25 steps, auto-resume on restart
+- ✅ **CPU Merge** — Merge LoRA weights on CPU to avoid GPU OOM
 - ✅ **LoRA Fine-Tuning** — Only 0.96% trainable params (29.9M of 3.1B)
 - ✅ **Auto Data Conversion** — Converts JSONL training data to TRL format
 - ✅ **Merge & Convert** — Merges LoRA weights → GGUF → Ollama model
@@ -45,9 +66,13 @@ Training data format (JSONL):
 
 ### 2. Train
 
+**Use v5 (crash-resilient):**
+
 ```bash
-python train_qlora_v3.py
+python train_qlora_v5.py
 ```
+
+> ⚠️ `train_qlora_v3.py` is the original that crashes at step 70 on multi-GPU. Use `train_qlora_v5.py` instead.
 
 Config options in the script:
 - `LoRA_RANK`: 16 (default)
@@ -56,9 +81,19 @@ Config options in the script:
 - `EPOCHS`: 3 (default)
 - `BATCH_SIZE_PER_GPU`: 1 (default, increase if VRAM allows)
 - `MAX_SEQUENCE_LENGTH`: 512 (default)
+- `SAVE_STEPS`: 25 (checkpoint every 25 steps, crash-resilient)
 
 ### 3. Merge & Convert to Ollama
 
+**Use CPU-only merge (avoids GPU OOM):**
+
+```bash
+python merge_convert_cpu.py
+```
+
+> ⚠️ `merge_and_convert.py` (GPU version) crashes on multi-GPU ROCm. Use `merge_convert_cpu.py` instead.
+
+The GPU version still exists for single-GPU setups:
 ```bash
 python merge_and_convert.py \
   --adapter-path output/trader-v2/checkpoint-best \
@@ -105,7 +140,26 @@ On AMD GPUs with ROCm, `bitsandbytes` 4-bit quantization causes segfaults due to
 | Approach | VRAM/GPU | Speed | Status |
 |----------|----------|-------|--------|
 | 4-bit QLoRA | ~4GB | 40 tok/s | ❌ Segfault on ROCm |
-| fp16 LoRA (this) | ~6GB | 58s/step | ✅ Works |
+| fp16 LoRA (v3) | ~6GB | 58s/step | ⚠️ Crashes at step 70 |
+| fp16 LoRA (v5) | ~6GB | 58s/step | ✅ Works |
+
+### v5 vs v3 Key Differences
+
+- HIP stability env vars (`HSA_ENABLE_SDMA`, `PYTORCH_HIP_ALLOC_CONF`, `NCCL_P2P_LEVEL`)
+- Checkpoints every 25 steps (vs epoch-only in v3)
+- Auto-resume from latest checkpoint
+- Crash recovery with error logging
+
+### Merge: GPU vs CPU
+
+Merging LoRA weights on multi-GPU ROCm also crashes. Solution:
+
+| Script | Mode | Status |
+|--------|------|--------|
+| `merge_and_convert.py` | GPU | ⚠️ Crashes on multi-GPU |
+| `merge_convert_cpu.py` | CPU-only | ✅ Works |
+
+The CPU merge is slower (~5 min) but reliable.
 
 ## Training Data Format
 

@@ -38,3 +38,10 @@ __pycache__/
 .idea/
 .vscode/
 *.iml
+# Training data (generated, large)
+training-data-*.jsonl
+output/
+*.safetensors
+*.gguf
+*.bin
+checkpoints/
