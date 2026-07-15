@@ -58,6 +58,26 @@ See [docs/PSP-FAILURE-FIX.md](docs/PSP-FAILURE-FIX.md) for full PSP failure anal
 3. **`device_map='auto'`** distributes layers sequentially causing GPU imbalance
 4. **PSP failures** on multi-GPU rigs with risers — fixed by `amdgpu.runpm=0`
 
+## LoRA Merge Pipeline (for Ollama-incompatible architectures)
+
+When Ollama drops support for a model architecture (e.g. NemotronForCausalLM in 0.32),
+you can still deploy fine-tuned models by merging LoRA onto an existing GGUF base.
+
+See: [docs/LORA-MERGE-PIPELINE.md](docs/LORA-MERGE-PIPELINE.md)
+
+```
+LoRA adapter → convert_lora_to_gguf.py → llama-export-lora → llama-quantize → ollama create
+```
+
+## Scripts
+
+| Script | Location | Purpose |
+|--------|----------|---------|
+| `train_nemotron_v3.py` | `tools/` | Balanced device_map training (4× RX 6600 XT) |
+| `convert_lora_to_gguf.py` | `tools/lora-merge-pipeline/` | PEFT LoRA → GGUF format |
+| `serve_nemotron_v3.py` | `tools/inference/` | HF Transformers API server (fallback) |
+| `backtest_nemotron_v3.py` | `tools/backtest/` | Validate signals against ground truth |
+
 ## Code Review Process
 
 All training scripts go through multi-LLM code review:
