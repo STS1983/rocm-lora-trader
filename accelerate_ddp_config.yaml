@@ -1,0 +1,18 @@
+# Accelerate config for DDP on 4× RX 6600 XT (ROCm 7.0)
+# Launch: accelerate launch --config_file accelerate_ddp_config.yaml train_qlora_v6.py
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: MULTI_GPU
+downcast_bf16: 'no'
+gpu_ids: all
+machine_rank: 0
+main_training_function: main
+mixed_precision: fp16
+num_machines: 1
+num_processes: 4
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
