@@ -2,11 +2,37 @@
 
 Fine-tune LLMs for trading on AMD ROCm with multi-GPU load balancing.
 
+## Project Structure
+
+```
+rocm-lora-trader/
+├── tools/
+│   ├── train_nemotron_v3.py          # Balanced device_map training (4× RX 6600 XT)
+│   ├── convert_data.py               # Training data conversion
+│   ├── inference/
+│   │   └── serve_nemotron_v3.py      # HF Transformers API server
+│   ├── backtest/
+│   │   └── backtest_nemotron_v3.py   # Backtest against validation data
+│   └── lora-merge-pipeline/
+│       ├── convert_lora_to_gguf.py   # PEFT LoRA → GGUF format
+│       ├── merge_nemotron_v3_gpu.py  # GPU merge (single GPU)
+│       └── merge_convert_cpu.py      # CPU-only merge (fallback)
+├── adapters/                          # LoRA adapter weights
+├── archive/                           # Older training script versions (v2-v6)
+├── docs/                              # Documentation
+├── tests/                             # Unit tests
+├── auto-retrain.sh                    # Automated retraining pipeline
+├── monitor_training.sh                # Training progress monitor
+├── system_prompt.txt                  # Trading signal system prompt
+├── requirements.txt                   # Python dependencies
+└── LICENSE                            # MIT License
+```
+
 ## Scripts
 
 ### train_nemotron_v3.py — Balanced device_map (Latest)
 - **Model:** Nemotron-Mini-4B-Instruct (4B params, 32 decoder layers)
-- **GPU:** 4× AMD RX 6600 XT (8GB each, gfx1032)
+- **GPU:** 4× AMD RX 6600 Xt (8GB each, gfx1032)
 - **Strategy:** Manual `device_map` with even layer splitting (8 layers/GPU)
 - **Fix:** Replaces `device_map='auto'` which caused GPU0 at 38-56% while GPU1-3 at 99%
 
@@ -17,26 +43,36 @@ export HSA_OVERRIDE_GFX_VERSION=10.3.0
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 # Run training (100 steps per chunk)
-python3 train_nemotron_v3.py
+python3 tools/train_nemotron_v3.py
 
 # Or with custom paths
 TRAIN_FILE=./data/train.jsonl VAL_FILE=./data/val.jsonl \
 ADAPTER_PATH=./adapters/my-adapter \
 OUTPUT_DIR=./output/my-model \
-CHUNK_STEPS=200 python3 train_nemotron_v3.py
+CHUNK_STEPS=200 python3 tools/train_nemotron_v3.py
 ```
 
-### Older Versions
-- `train_qlora_v3.py` — QLoRA v3 (single GPU, Qwen2.5-3B)
-- `train_qlora_v5.py` — QLoRA v5 (improved data processing)
-- `train_qlora_v6.py` — QLoRA v6 (multi-GPU DDP attempt, broken on ROCm)
+### Archived Versions
+- `archive/train_qlora_v2.py` — QLoRA v2 (single GPU)
+- `archive/train_qlora_v3.py` — QLoRA v3 (multi-GPU model parallelism)
+- `archive/train_qlora_v4.py` — QLoRA v4
+- `archive/train_qlora_v5.py` — QLoRA v5 (resilient multi-GPU)
+- `archive/train_qlora_v6.py` — QLoRA v6 (DDP attempt, broken on ROCm)
+- `archive/launch_v6.sh` — DDP launcher for v6
 
 ## Requirements
+
+See [requirements.txt](requirements.txt). Key dependencies:
 
 - ROCm 7.2+, PyTorch 2.12+rocm7.2
 - transformers >= 4.57 (uses `dtype=`, not deprecated `torch_dtype=`)
 - peft, trl, accelerate, datasets
 - AMD GPU with `HSA_OVERRIDE_GFX_VERSION=10.3.0` (for gfx1032 / RX 6600 XT)
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/rocm7.2
+pip install -r requirements.txt
+```
 
 ## GRUB Kernel Parameters (Critical for Multi-GPU Riser Rigs)
 
@@ -69,14 +105,18 @@ See: [docs/LORA-MERGE-PIPELINE.md](docs/LORA-MERGE-PIPELINE.md)
 LoRA adapter → convert_lora_to_gguf.py → llama-export-lora → llama-quantize → ollama create
 ```
 
-## Scripts
+## Testing
 
-| Script | Location | Purpose |
-|--------|----------|---------|
-| `train_nemotron_v3.py` | `tools/` | Balanced device_map training (4× RX 6600 XT) |
-| `convert_lora_to_gguf.py` | `tools/lora-merge-pipeline/` | PEFT LoRA → GGUF format |
-| `serve_nemotron_v3.py` | `tools/inference/` | HF Transformers API server (fallback) |
-| `backtest_nemotron_v3.py` | `tools/backtest/` | Validate signals against ground truth |
+```bash
+# Run all tests
+python3 tests/test_convert_data.py
+python3 tests/test_training_scripts.py
+python3 tests/test_shell_scripts.py
+
+# Or with pytest
+pip install pytest
+python3 -m pytest tests/ -v
+```
 
 ## Code Review Process
 
@@ -96,3 +136,7 @@ All training scripts go through multi-LLM code review:
 | GPU 1 params | 15.6% (layers 8-15) |
 | GPU 2 params | 15.6% (layers 16-23) |
 | GPU 3 params | 34.4% (layers 24-31 + norm + lm_head) |
+
+## License
+
+[MIT](LICENSE) — Copyright (c) 2026 STS1983

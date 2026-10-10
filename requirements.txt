@@ -1,0 +1,14 @@
+# ROCm LoRA Trader — Python Dependencies
+# Tested on ROCm 7.2 + PyTorch 2.12+rocm7.2
+# Install PyTorch first from the ROCm index:
+#   pip install torch --index-url https://download.pytorch.org/whl/rocm7.2
+
+torch>=2.10
+transformers>=4.57
+peft>=0.12
+trl>=0.12
+accelerate>=1.2
+datasets>=3.0
+sentencepiece
+protobuf
+huggingface_hub>=0.26
